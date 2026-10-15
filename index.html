@@ -51,6 +51,10 @@
   .empty{color:var(--sub);text-align:center;padding:30px 0}
   @keyframes pop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
 
+  .tabs{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .tab{background:var(--card);border:1px solid var(--line);color:var(--sub);padding:12px 20px;border-radius:12px;font-size:1.05rem}
+  .tab.active{background:var(--accent);border-color:var(--accent);color:#1f1300}
+  .tab small{display:block;font-weight:500;font-size:.78rem;opacity:.8;margin-top:2px}
   .full{grid-column:1/-1}
   .chips{display:flex;flex-wrap:wrap;gap:8px}
   .chip{
@@ -65,10 +69,11 @@
 <body>
 <header>
   <h1>🎲 발표 순서 뽑기</h1>
-  <p>2반 · 4반 발표 순서를 무작위로 정합니다</p>
+  <p id="subtitle"></p>
 </header>
 
 <main>
+  <nav class="tabs" id="tabs"></nav>
   <section class="panel stage">
     <h2>지금 뽑기</h2>
     <div class="display" id="display">
@@ -99,22 +104,68 @@
 </main>
 
 <script>
-const RAW = [
-  [2,5,"김주영"],[2,8,"박상희"],[2,10,"박아은"],[2,12,"서호영"],[2,13,"신세영"],
-  [2,18,"이민균"],[2,20,"이현지"],[2,23,"정시훈"],[2,25,"최예진"],[2,28,"권윤혁"],
-  [4,1,"김민진"],[4,2,"김승규"],[4,3,"김연아"],[4,4,"김우주"],[4,5,"노예찬"],
-  [4,6,"문근영"],[4,7,"박건우"],[4,8,"박태은"],[4,9,"방미경"],[4,10,"배다현"],
-  [4,11,"서다영"],[4,12,"신정원"],[4,13,"유강석"],[4,14,"윤형준"],[4,15,"이광제"],
-  [4,19,"이수아"],[4,20,"이안"],[4,21,"이은율"],[4,23,"이준서"],[4,24,"정재성"],
-  [4,25,"정지율"],[4,26,"허유진(공동)"]
+const GROUPS = [
+  { id:"g24", name:"사문탐 2-4반", note:"2반·4반", raw:[
+    [2,5,"김주영"],[2,8,"박상희"],[2,10,"박아은"],[2,12,"서호영"],[2,13,"신세영"],
+    [2,18,"이민균"],[2,20,"이현지"],[2,23,"정시훈"],[2,25,"최예진"],[2,28,"권윤혁"],
+    [4,1,"김민진"],[4,2,"김승규"],[4,3,"김연아"],[4,4,"김우주"],[4,5,"노예찬"],
+    [4,6,"문근영"],[4,7,"박건우"],[4,8,"박태은"],[4,9,"방미경"],[4,10,"배다현"],
+    [4,11,"서다영"],[4,12,"신정원"],[4,13,"유강석"],[4,14,"윤형준"],[4,15,"이광제"],
+    [4,19,"이수아"],[4,20,"이안"],[4,21,"이은율"],[4,23,"이준서"],[4,24,"정재성"],
+    [4,25,"정지율"],[4,26,"허유진(공동)"]
+  ]},
+  { id:"g23", name:"사문탐 2-3반", note:"3반·5반", raw:[
+    [3,1,"간서연"],[3,2,"강민채"],[3,3,"권태연"],[3,4,"김도희"],[3,5,"김시우"],
+    [3,6,"김시원"],[3,7,"김유찬"],[3,8,"김은서"],[3,9,"김혜민"],[3,10,"노은율"],
+    [3,11,"박수진"],[3,12,"서원태"],[3,14,"송준희"],[3,15,"송현빈"],[3,17,"오나윤"],
+    [3,18,"유하람"],[3,19,"이세형"],[3,20,"이승현"],[3,21,"이시연"],[3,22,"이시현"],
+    [3,23,"이태위"],[3,24,"장서진"],[3,25,"장유성"],[3,26,"조인서"],[3,27,"주현서"],
+    [5,1,"강백호"],[5,8,"김은우"],[5,10,"나희서"],[5,14,"선우석"]
+  ]},
+  { id:"g27", name:"사문탐 2-7반", note:"6반·7반", raw:[
+    [6,1,"김민결"],[6,2,"김아윤"],[6,4,"류지윤"],[6,5,"문무현"],[6,6,"박민아"],
+    [6,7,"박민효"],[6,10,"서보경"],[6,13,"신서희"],[6,14,"심지연"],[6,16,"원예서"],
+    [6,18,"이영근"],[6,21,"이지윤"],[6,22,"이지후"],[6,23,"정범식"],[6,24,"최현아"],
+    [6,25,"허민해"],
+    [7,1,"김건훈"],[7,2,"김단우(공동)"],[7,4,"김민지"],[7,5,"김서현"],[7,6,"김소율"],
+    [7,9,"김은우"],[7,10,"김혜린"],[7,13,"손민경"],[7,14,"손현우"],[7,15,"신륜"],
+    [7,17,"이나경"],[7,18,"이산"],[7,19,"이윤호"],[7,20,"이재원"],[7,22,"임세준"],
+    [7,23,"전서윤"],[7,24,"정서은"],[7,27,"최예진"]
+  ]}
 ];
-const STUDENTS = RAW.map(([c,n,name]) => ({id:`${c}-${n}`, cls:c, num:n, name}));
-const byId = Object.fromEntries(STUDENTS.map(s => [s.id, s]));
-const KEY = "presentation_order_v1";
+GROUPS.forEach(g => {
+  g.students = g.raw.map(([c,n,name]) => ({id:`${c}-${n}`, cls:c, num:n, name}));
+  g.byId = Object.fromEntries(g.students.map(s => [s.id, s]));
+});
+const KEY = "presentation_order_v2";
 
-let state = { order: [], absent: [] };
-try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.order && s.absent) state = s; } catch(e){}
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} };
+let store = { current:"g23", groups:{} };
+try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.groups) store = s; } catch(e){}
+// 이전 버전(2-4반 한 개짜리) 진행 상황 이어받기
+if (!store.groups.g24) {
+  try {
+    const old = JSON.parse(localStorage.getItem("presentation_order_v1"));
+    if (old && old.order && old.absent) store.groups.g24 = old;
+  } catch(e){}
+}
+GROUPS.forEach(g => { if (!store.groups[g.id]) store.groups[g.id] = {order:[], absent:[]}; });
+if (!GROUPS.some(g => g.id === store.current)) store.current = GROUPS[0].id;
+
+let group = GROUPS.find(g => g.id === store.current);
+let state = store.groups[group.id];
+let STUDENTS = group.students, byId = group.byId;
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch(e){} };
+
+function switchGroup(id){
+  if (spinning) return;
+  store.current = id; save();
+  group = GROUPS.find(g => g.id === id);
+  state = store.groups[id];
+  STUDENTS = group.students; byId = group.byId;
+  display.className = "display";
+  display.innerHTML = '<div class="placeholder">버튼을 눌러 다음 발표자를 뽑으세요</div>';
+  render();
+}
 
 let spinning = false;
 
@@ -133,6 +184,8 @@ function remaining(){
 function label(s){ return `${s.cls}반 ${s.num}번`; }
 
 function render(newId){
+  $("tabs").innerHTML = GROUPS.map(g => `<button class="tab ${g.id===group.id?'active':''}" data-g="${g.id}">${g.name}<small>${g.note} · ${g.students.length}명</small></button>`).join("");
+  $("subtitle").textContent = `${group.name} (${group.note}) 발표 순서를 무작위로 정합니다`;
   // order list
   const ol = $("order");
   if (!state.order.length) {
@@ -212,7 +265,7 @@ function undo(){
 
 function reset(){
   if (spinning) return;
-  if (!confirm("뽑은 순서를 모두 지우고 처음부터 다시 할까요? (결석 표시는 유지됩니다)")) return;
+  if (!confirm("뽑은 순서를 모두 지우고 처음부터 다시 할까요? (결석 표시는 유지됩니다. 현재 탭의 반만 초기화)")) return;
   state.order = []; save();
   display.className = "display";
   display.innerHTML = '<div class="placeholder">버튼을 눌러 다음 발표자를 뽑으세요</div>';
@@ -227,6 +280,9 @@ $("chips").addEventListener("click", e => {
   const i = state.absent.indexOf(id);
   if (i >= 0) state.absent.splice(i,1); else state.absent.push(id);
   save(); render();
+});
+$("tabs").addEventListener("click", e => {
+  const b = e.target.closest(".tab"); if (b) switchGroup(b.dataset.g);
 });
 $("drawBtn").onclick = draw;
 $("allBtn").onclick = drawAll;
